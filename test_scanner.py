@@ -5,7 +5,7 @@ import time
 
 BASE_URL = "https://api.mexc.com"
 
-# --- Telegram ---
+# Telegram
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -13,34 +13,40 @@ def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.get(url, params={"chat_id": CHAT_ID, "text": message})
 
-# --- Fetch top N USDT coins by 24h volume ---
-def top_symbols_by_volume(n=10):
-    url = f"{BASE_URL}/api/v3/ticker/24hr"
+# Fetch all USDT symbols
+def fetch_usdt_symbols():
+    url = f"{BASE_URL}/api/v3/exchangeInfo"
     data = requests.get(url).json()
-    usdt = [d for d in data if d['symbol'].endswith('USDT') and d['symbol'][-4:] == 'USDT']
-    sorted_usdt = sorted(usdt, key=lambda x: float(x['quoteVolume']), reverse=True)
-    return [s['symbol'] for s in sorted_usdt[:n]]
+    symbols = [
+        s['symbol'] for s in data['symbols']
+        if s['status'] == '1' and s['quoteAsset'] == 'USDT'
+    ]
+    return symbols
 
-# --- Fetch previous day candle ---
-def fetch_previous_day_candle(symbol):
+# Fetch last N daily candles
+def fetch_klines(symbol, interval='1d', limit=3):
     url = f"{BASE_URL}/api/v3/klines"
-    params = {'symbol': symbol, 'interval': '1d', 'limit': 2}  # last 2 days
+    params = {'symbol': symbol, 'interval': interval, 'limit': limit}
     data = requests.get(url, params=params).json()
     if not isinstance(data, list) or len(data) < 2:
         return None
-    prev_day = data[-2]  # previous day
-    prev_high = float(prev_day[2])
-    prev_low = float(prev_day[3])
-    return prev_high, prev_low
+    df = pd.DataFrame(
+        data,
+        columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_volume']
+    )
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('timestamp', inplace=True)
+    return df.astype(float)
 
-# --- Fetch current price ---
-def fetch_current_price(symbol):
-    url = f"{BASE_URL}/api/v3/ticker/price"
-    params = {'symbol': symbol}
-    data = requests.get(url, params=params).json()
-    return float(data['price'])
+# Get top N coins by 24h volume
+def top_symbols_by_volume(n=10):
+    url = f"{BASE_URL}/api/v3/ticker/24hr"
+    data = requests.get(url).json()
+    usdt = [d for d in data if d['symbol'].endswith('USDT')]
+    sorted_usdt = sorted(usdt, key=lambda x: float(x['quoteVolume']), reverse=True)
+    return [s['symbol'] for s in sorted_usdt[:n]]
 
-# --- Main ---
+# Main
 def main():
     symbols = top_symbols_by_volume(10)  # top 10 coins
     high_hit = []
@@ -48,23 +54,23 @@ def main():
 
     for symbol in symbols:
         try:
-            prev = fetch_previous_day_candle(symbol)
-            if prev is None:
+            df = fetch_klines(symbol, "1d", 3)
+            if df is None or len(df) < 2:
                 continue
-            prev_high, prev_low = prev
 
-            current_price = fetch_current_price(symbol)
+            prev = df.iloc[-2]   # previous day
+            latest = df.iloc[-1] # latest candle
 
-            # Compare current price vs previous high/low
-            if current_price >= prev_high:
+            # Compare with previous day
+            if latest['high'] >= prev['high']:
                 high_hit.append(symbol)
-            if current_price <= prev_low:
+            if latest['low'] <= prev['low']:
                 low_hit.append(symbol)
 
             time.sleep(0.2)  # avoid rate limit
 
         except Exception as e:
-            print(f"Error {symbol}: {e}")
+            print(f"Error: {symbol} - {e}")
 
     # Prepare Telegram message
     message = "🔥 MEXC Top 10 Coins — Previous Daily High/Low Hit\n\n"
