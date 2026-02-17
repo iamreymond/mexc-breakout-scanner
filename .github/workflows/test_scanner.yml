@@ -1,24 +1,25 @@
-name: Test MEXC Scanner
+name: Test MEXC Scanner (Top 5)
 
 on:
-  workflow_dispatch:  # Manual run
+  workflow_dispatch:
   schedule:
     - cron: "* * * * *"  # every minute for testing
 
 jobs:
-  scan:
+  test:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repo
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
 
-      - name: Install Dependencies
-        run: pip install pandas requests
+      - name: Install deps
+        run: pip install requests
 
       - name: Run Test Scanner
         run: python test_scanner.py
