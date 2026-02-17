@@ -1,29 +1,31 @@
-name: MEXC Breakout Scanner
+name: MEXC Daily High/Low Scanner
 
 on:
   schedule:
-    - cron: "* * * * *"  # RUN EVERY 1 MINUTE (TEST MODE)
-  workflow_dispatch:
+    # Every 4 hours: 0, 4, 8, 12, 16, 20 UTC
+    - cron: "0 0,4,8,12,16,20 * * *"
+  workflow_dispatch: # manual trigger
 
 jobs:
   scan:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout Repo
         uses: actions/checkout@v3
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: "3.12"
 
-      - name: Install dependencies
-        run: pip install requests
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pandas
 
-      - name: Run Telegram Test
-        run: python test_telegram.py
+      - name: Run MEXC Scanner
+        run: python scanner.py
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-
