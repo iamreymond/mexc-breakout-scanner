@@ -2,8 +2,7 @@ name: MEXC Daily High/Low Scanner
 
 on:
   schedule:
-    # Every 4 hours: 0, 4, 8, 12, 16, 20 UTC
-    - cron: "0 0,4,8,12,16,20 * * *"
+    - cron: "0 4,8,12,16 * * *"
   workflow_dispatch: # manual trigger
 
 jobs:
