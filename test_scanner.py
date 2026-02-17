@@ -13,21 +13,11 @@ def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.get(url, params={"chat_id": CHAT_ID, "text": message})
 
-# --- Fetch all USDT symbols ---
-def fetch_usdt_symbols():
-    url = f"{BASE_URL}/api/v3/exchangeInfo"
-    data = requests.get(url).json()
-    symbols = [
-        s['symbol'] for s in data['symbols']
-        if s['status'] == '1' and s['quoteAsset'] == 'USDT'
-    ]
-    return symbols
-
-# --- Get top N symbols by 24h quote volume ---
-def top_symbols_by_volume(n=5):
+# --- Fetch top N USDT coins by 24h volume ---
+def top_symbols_by_volume(n=10):
     url = f"{BASE_URL}/api/v3/ticker/24hr"
     data = requests.get(url).json()
-    usdt = [d for d in data if d['symbol'].endswith('USDT')]
+    usdt = [d for d in data if d['symbol'].endswith('USDT') and d['symbol'][-4:] == 'USDT']
     sorted_usdt = sorted(usdt, key=lambda x: float(x['quoteVolume']), reverse=True)
     return [s['symbol'] for s in sorted_usdt[:n]]
 
@@ -38,7 +28,7 @@ def fetch_previous_day_candle(symbol):
     data = requests.get(url, params=params).json()
     if not isinstance(data, list) or len(data) < 2:
         return None
-    prev_day = data[-2]  # second last = previous day
+    prev_day = data[-2]  # previous day
     prev_high = float(prev_day[2])
     prev_low = float(prev_day[3])
     return prev_high, prev_low
@@ -52,7 +42,7 @@ def fetch_current_price(symbol):
 
 # --- Main ---
 def main():
-    symbols = top_symbols_by_volume(5)  # top 5 by 24h quote volume
+    symbols = top_symbols_by_volume(10)  # top 10 coins
     high_hit = []
     low_hit = []
 
@@ -65,18 +55,19 @@ def main():
 
             current_price = fetch_current_price(symbol)
 
+            # Compare current price vs previous high/low
             if current_price >= prev_high:
-                high_hit.append(f"{symbol} (price: {current_price} >= prev_high: {prev_high})")
+                high_hit.append(symbol)
             if current_price <= prev_low:
-                low_hit.append(f"{symbol} (price: {current_price} <= prev_low: {prev_low})")
+                low_hit.append(symbol)
 
-            time.sleep(0.2)  # avoid API rate limit
+            time.sleep(0.2)  # avoid rate limit
 
         except Exception as e:
             print(f"Error {symbol}: {e}")
 
     # Prepare Telegram message
-    message = "🔥 MEXC Top 5 Coins — Previous Daily High/Low Hit\n\n"
+    message = "🔥 MEXC Top 10 Coins — Previous Daily High/Low Hit\n\n"
     if high_hit:
         message += "✅ Hit Previous High:\n" + "\n".join(high_hit) + "\n\n"
     if low_hit:
