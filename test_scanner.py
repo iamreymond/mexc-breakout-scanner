@@ -13,20 +13,6 @@ def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.get(url, params={"chat_id": CHAT_ID, "text": message})
 
-# Fetch top N USDT coins by 24h volume, exclude stablecoins
-def top_symbols_by_volume(n=100):
-    url = f"{BASE_URL}/api/v3/ticker/24hr"
-    data = requests.get(url).json()
-    usdt = [d for d in data if d['symbol'].endswith('USDT')]
-
-    # Exclude stablecoins / USD pairs
-    exclude = ["USDT", "USDC", "BUSD", "USD1", "TUSD", "USDP", "GOLD"]
-    filtered = [d for d in usdt if not any(stable in d['symbol'] for stable in exclude)]
-
-    # Sort by 24h quote volume
-    sorted_usdt = sorted(filtered, key=lambda x: float(x['quoteVolume']), reverse=True)
-    return [s['symbol'] for s in sorted_usdt[:n]]
-
 # Fetch last N daily candles
 def fetch_klines(symbol, interval='1d', limit=3):
     url = f"{BASE_URL}/api/v3/klines"
@@ -41,6 +27,16 @@ def fetch_klines(symbol, interval='1d', limit=3):
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
     return df.astype(float)
+
+# Get top N coins by 24h volume (all USDT coins, no exclusion)
+def top_symbols_by_volume(n=100):
+    url = f"{BASE_URL}/api/v3/ticker/24hr"
+    data = requests.get(url).json()
+    usdt = [d for d in data if d['symbol'].endswith('USDT')]
+
+    # Sort by 24h quote volume
+    sorted_usdt = sorted(usdt, key=lambda x: float(x['quoteVolume']), reverse=True)
+    return [s['symbol'] for s in sorted_usdt[:n]]
 
 # Main
 def main():
