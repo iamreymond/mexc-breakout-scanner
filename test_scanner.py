@@ -13,15 +13,19 @@ def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     requests.get(url, params={"chat_id": CHAT_ID, "text": message})
 
-# Fetch all USDT symbols
-def fetch_usdt_symbols():
-    url = f"{BASE_URL}/api/v3/exchangeInfo"
+# Fetch top N USDT coins by 24h volume, exclude stablecoins
+def top_symbols_by_volume(n=100):
+    url = f"{BASE_URL}/api/v3/ticker/24hr"
     data = requests.get(url).json()
-    symbols = [
-        s['symbol'] for s in data['symbols']
-        if s['status'] == '1' and s['quoteAsset'] == 'USDT'
-    ]
-    return symbols
+    usdt = [d for d in data if d['symbol'].endswith('USDT')]
+
+    # Exclude stablecoins / USD pairs
+    exclude = ["USDT", "USDC", "BUSD", "USD1", "TUSD", "USDP", "GOLD"]
+    filtered = [d for d in usdt if not any(stable in d['symbol'] for stable in exclude)]
+
+    # Sort by 24h quote volume
+    sorted_usdt = sorted(filtered, key=lambda x: float(x['quoteVolume']), reverse=True)
+    return [s['symbol'] for s in sorted_usdt[:n]]
 
 # Fetch last N daily candles
 def fetch_klines(symbol, interval='1d', limit=3):
@@ -38,17 +42,9 @@ def fetch_klines(symbol, interval='1d', limit=3):
     df.set_index('timestamp', inplace=True)
     return df.astype(float)
 
-# Get top N coins by 24h volume
-def top_symbols_by_volume(n=10):
-    url = f"{BASE_URL}/api/v3/ticker/24hr"
-    data = requests.get(url).json()
-    usdt = [d for d in data if d['symbol'].endswith('USDT')]
-    sorted_usdt = sorted(usdt, key=lambda x: float(x['quoteVolume']), reverse=True)
-    return [s['symbol'] for s in sorted_usdt[:n]]
-
 # Main
 def main():
-    symbols = top_symbols_by_volume(10)  # top 10 coins
+    symbols = top_symbols_by_volume(100)  # top 100 coins
     high_hit = []
     low_hit = []
 
@@ -73,7 +69,7 @@ def main():
             print(f"Error: {symbol} - {e}")
 
     # Prepare Telegram message
-    message = "🔥 MEXC Top 10 Coins — Previous Daily High/Low Hit\n\n"
+    message = "🔥 MEXC Top 100 Coins — Previous Daily High/Low Hit\n\n"
     if high_hit:
         message += "✅ Hit Previous High:\n" + "\n".join(high_hit) + "\n\n"
     if low_hit:
@@ -82,7 +78,7 @@ def main():
         message += "No coins hit previous daily high or low."
 
     send_telegram(message)
-    print("Test complete. Telegram message sent.")
+    print("Scan complete. Telegram message sent.")
 
 if __name__ == "__main__":
     main()
