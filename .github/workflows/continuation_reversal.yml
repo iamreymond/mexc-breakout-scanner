@@ -1,7 +1,9 @@
 name: MEXC Continuation & Reversal Scanner
 
 on:
-  workflow_dispatch:   # manual test only for now
+  schedule:
+    - cron: "5 0 * * *"   # 8:05 AM Manila (UTC+8)
+  workflow_dispatch:
 
 jobs:
   scan:
