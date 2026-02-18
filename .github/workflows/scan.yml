@@ -1,7 +1,9 @@
 name: MEXC Daily High/Low Scanner
 
 on:
-  workflow_dispatch: # manual trigger only
+  schedule:
+    - cron: "0 4,8,12,16 * * *"
+  workflow_dispatch: # manual trigger
 
 jobs:
   scan:
