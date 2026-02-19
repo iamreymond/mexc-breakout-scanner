@@ -4,7 +4,7 @@ import os
 import time
 
 # ==============================
-# BINANCE CONFIG
+# CONFIG
 # ==============================
 
 BASE_URL = "https://api.binance.com"
@@ -13,53 +13,65 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 # ==============================
-# TELEGRAM
+# TELEGRAM FUNCTION
 # ==============================
 
 def send_telegram(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    requests.get(url, params={"chat_id": CHAT_ID, "text": message})
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        requests.get(url, params={"chat_id": CHAT_ID, "text": message}, timeout=10)
+    except Exception as e:
+        print("Telegram Error:", e)
 
 
 # ==============================
-# FETCH ALL RANKED SYMBOLS
+# FETCH ALL BINANCE USDT SYMBOLS
+# RANKED BY 24H VOLUME
 # ==============================
 
 def get_all_ranked_symbols():
-    # Exchange Info
-    r = requests.get(f"{BASE_URL}/api/v3/exchangeInfo")
-    exchange_info = r.json()
+    try:
+        # Exchange Info
+        r = requests.get(f"{BASE_URL}/api/v3/exchangeInfo", timeout=10)
+        r.raise_for_status()
+        exchange_info = r.json()
 
-    if 'symbols' not in exchange_info:
-        print("Error fetching exchangeInfo:", exchange_info)
+        if 'symbols' not in exchange_info:
+            print("Invalid exchangeInfo response:", exchange_info)
+            return []
+
+        trading_symbols = [
+            s['symbol']
+            for s in exchange_info['symbols']
+            if s['status'] == 'TRADING' and s['quoteAsset'] == 'USDT'
+        ]
+
+        # 24hr Ticker
+        r2 = requests.get(f"{BASE_URL}/api/v3/ticker/24hr", timeout=10)
+        r2.raise_for_status()
+        ticker_24h = r2.json()
+
+        if not isinstance(ticker_24h, list):
+            print("Invalid ticker response:", ticker_24h)
+            return []
+
+        usdt_data = [
+            d for d in ticker_24h
+            if d['symbol'] in trading_symbols
+        ]
+
+        sorted_usdt = sorted(
+            usdt_data,
+            key=lambda x: float(x['quoteVolume']),
+            reverse=True
+        )
+
+        # Return ranked list
+        return [(rank + 1, s['symbol']) for rank, s in enumerate(sorted_usdt)]
+
+    except Exception as e:
+        print("Binance API Error:", e)
         return []
-
-    trading_symbols = [
-        s['symbol'] for s in exchange_info['symbols']
-        if s['status'] == 'TRADING' and s['quoteAsset'] == 'USDT'
-    ]
-
-    # 24h ticker for ranking
-    r2 = requests.get(f"{BASE_URL}/api/v3/ticker/24hr")
-    ticker_24h = r2.json()
-
-    if not isinstance(ticker_24h, list):
-        print("Error fetching ticker:", ticker_24h)
-        return []
-
-    usdt_data = [
-        d for d in ticker_24h
-        if d['symbol'] in trading_symbols
-    ]
-
-    sorted_usdt = sorted(
-        usdt_data,
-        key=lambda x: float(x['quoteVolume']),
-        reverse=True
-    )
-
-    # Return ranked list
-    return [(rank + 1, s['symbol']) for rank, s in enumerate(sorted_usdt)]
 
 
 # ==============================
@@ -67,27 +79,35 @@ def get_all_ranked_symbols():
 # ==============================
 
 def fetch_klines(symbol, interval='1d', limit=4):
-    url = f"{BASE_URL}/api/v3/klines"
-    params = {'symbol': symbol, 'interval': interval, 'limit': limit}
-    data = requests.get(url, params=params).json()
+    try:
+        url = f"{BASE_URL}/api/v3/klines"
+        params = {'symbol': symbol, 'interval': interval, 'limit': limit}
 
-    if not isinstance(data, list) or len(data) < 3:
+        r = requests.get(url, params=params, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+
+        if not isinstance(data, list) or len(data) < 3:
+            return None
+
+        df = pd.DataFrame(
+            data,
+            columns=[
+                'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                'close_time', 'quote_asset_volume',
+                'num_trades', 'taker_buy_base',
+                'taker_buy_quote', 'ignore'
+            ]
+        )
+
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df.set_index('timestamp', inplace=True)
+
+        return df.astype(float)
+
+    except Exception as e:
+        print(f"Kline Error {symbol}:", e)
         return None
-
-    df = pd.DataFrame(
-        data,
-        columns=[
-            'timestamp', 'open', 'high', 'low', 'close', 'volume',
-            'close_time', 'quote_asset_volume',
-            'num_trades', 'taker_buy_base',
-            'taker_buy_quote', 'ignore'
-        ]
-    )
-
-    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df.set_index('timestamp', inplace=True)
-
-    return df.astype(float)
 
 
 # ==============================
@@ -116,7 +136,7 @@ def main():
 
             base = df.iloc[-3]      # Candle #1
             prev = df.iloc[-2]      # Candle #2
-            today = df.iloc[-1]     # Candle #3
+            today = df.iloc[-1]     # Candle #3 (current daily)
 
             base_high = base['high']
             base_low = base['low']
@@ -143,10 +163,10 @@ def main():
                 base_low < prev['close'] < base_high):
                 bullish_rev.append(f"{rank}. {symbol}")
 
-            time.sleep(0.1)  # avoid rate limit
+            time.sleep(0.05)  # small delay for safety
 
         except Exception as e:
-            print(f"Error: {symbol} - {e}")
+            print(f"Error processing {symbol}:", e)
 
     # ==============================
     # TELEGRAM MESSAGE
