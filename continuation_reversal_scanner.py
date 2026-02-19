@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import time
 
-BASE_URL = "https://api.mexc.com"
+BASE_URL = "https://api.binance.com"
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
@@ -22,29 +22,53 @@ def fetch_klines(symbol, interval='1d', limit=4):
 
     df = pd.DataFrame(
         data,
-        columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_volume']
+        columns=[
+            'timestamp', 'open', 'high', 'low', 'close', 'volume',
+            'close_time', 'quote_asset_volume', 'num_trades',
+            'taker_buy_base', 'taker_buy_quote', 'ignore'
+        ]
     )
 
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
     df.set_index('timestamp', inplace=True)
     return df.astype(float)
 
-def top_symbols_by_volume(n=100):
-    url = f"{BASE_URL}/api/v3/ticker/24hr"
-    data = requests.get(url).json()
-    usdt = [d for d in data if d['symbol'].endswith('USDT')]
-    sorted_usdt = sorted(usdt, key=lambda x: float(x['quoteVolume']), reverse=True)
-    return [s['symbol'] for s in sorted_usdt[:n]]
+# ✅ Get ALL Binance USDT symbols ranked by 24h volume
+def get_all_ranked_symbols():
+    # Get trading symbols
+    exchange_info = requests.get(f"{BASE_URL}/api/v3/exchangeInfo").json()
+    trading_symbols = [
+        s['symbol'] for s in exchange_info['symbols']
+        if s['status'] == 'TRADING' and s['quoteAsset'] == 'USDT'
+    ]
+
+    # Get 24h volume data
+    ticker_24h = requests.get(f"{BASE_URL}/api/v3/ticker/24hr").json()
+
+    usdt_data = [
+        d for d in ticker_24h
+        if d['symbol'] in trading_symbols
+    ]
+
+    # Sort by quoteVolume (highest first)
+    sorted_usdt = sorted(
+        usdt_data,
+        key=lambda x: float(x['quoteVolume']),
+        reverse=True
+    )
+
+    # Return ranked list
+    return [(rank + 1, s['symbol']) for rank, s in enumerate(sorted_usdt)]
 
 def main():
-    symbols = top_symbols_by_volume(100)
+    ranked_symbols = get_all_ranked_symbols()
 
     bullish_cont = []
     bearish_cont = []
     bullish_rev = []
     bearish_rev = []
 
-    for symbol in symbols:
+    for rank, symbol in ranked_symbols:
         try:
             df = fetch_klines(symbol, "1d", 4)
             if df is None or len(df) < 3:
@@ -61,34 +85,30 @@ def main():
             # CONTINUATION
             # ======================
 
-            # Bullish continuation
             if prev['close'] > base_high and today['close'] > base_high:
-                bullish_cont.append(symbol)
+                bullish_cont.append(f"{rank}. {symbol}")
 
-            # Bearish continuation
             if prev['close'] < base_low and today['close'] < base_low:
-                bearish_cont.append(symbol)
+                bearish_cont.append(f"{rank}. {symbol}")
 
             # ======================
             # REVERSAL
             # ======================
 
-            # Bearish reversal (upper sweep)
             if (prev['high'] > base_high and
                 base_low < prev['close'] < base_high):
-                bearish_rev.append(symbol)
+                bearish_rev.append(f"{rank}. {symbol}")
 
-            # Bullish reversal (lower sweep)
             if (prev['low'] < base_low and
                 base_low < prev['close'] < base_high):
-                bullish_rev.append(symbol)
+                bullish_rev.append(f"{rank}. {symbol}")
 
-            time.sleep(0.2)
+            time.sleep(0.1)  # faster but safe
 
         except Exception as e:
             print(f"Error: {symbol} - {e}")
 
-    message = "🔥 MEXC Top 100 — Continuation & Reversal Scan\n\n"
+    message = "🔥 Binance — Continuation & Reversal Scan (All USDT Ranked by Volume)\n\n"
 
     if bullish_cont:
         message += "🟢 Bullish Continuation:\n" + "\n".join(bullish_cont) + "\n\n"
