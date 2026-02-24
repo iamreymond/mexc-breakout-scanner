@@ -45,10 +45,12 @@ def send_telegram(text):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
-        "text": text,
-        "parse_mode": "HTML"
+        "text": text
     }
-    requests.post(url, data=payload)
+
+    response = requests.post(url, data=payload)
+    print("Telegram Status:", response.status_code)
+    print("Telegram Response:", response.text)
 
 
 # ==============================
