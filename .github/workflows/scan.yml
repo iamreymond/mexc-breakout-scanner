@@ -25,7 +25,7 @@ jobs:
 
       - run: pip install requests pandas
 
-      - name: Run Binance 4H Reversal Scanner
+      - name: Run Scanner
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
