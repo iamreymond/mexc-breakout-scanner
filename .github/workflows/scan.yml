@@ -1,30 +1,27 @@
-name: Binance 4H Reversal Scanner
+name: MEXC 4H Reversal Scanner
 
 on:
   schedule:
-    - cron: "30 0 * * *"
-    - cron: "0 1 * * *"
-    - cron: "30 4 * * *"
-    - cron: "0 5 * * *"
-    - cron: "30 8 * * *"
-    - cron: "0 9 * * *"
-    - cron: "30 12 * * *"
-    - cron: "0 13 * * *"
+    - cron: "30 0 * * *"   # 8:30 AM PHT
+    - cron: "0 1 * * *"    # 9:00 AM PHT
+    - cron: "30 4 * * *"   # 12:30 PM PHT
+    - cron: "0 5 * * *"    # 1:00 PM PHT
+    - cron: "30 8 * * *"   # 4:30 PM PHT
+    - cron: "0 9 * * *"    # 5:00 PM PHT
+    - cron: "30 12 * * *"  # 8:30 PM PHT
+    - cron: "0 13 * * *"   # 9:00 PM PHT
   workflow_dispatch:
 
 jobs:
-  run:
+  scan:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
-
       - uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
-
+          python-version: "3.12"
       - run: pip install requests pandas
-
       - name: Run Scanner
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
