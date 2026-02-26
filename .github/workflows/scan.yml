@@ -1,15 +1,6 @@
 name: MEXC 4H Reversal Scanner
 
 on:
-  schedule:
-    - cron: "30 0 * * *"   # 8:30 AM PHT
-    - cron: "0 1 * * *"    # 9:00 AM PHT
-    - cron: "30 4 * * *"   # 12:30 PM PHT
-    - cron: "0 5 * * *"    # 1:00 PM PHT
-    - cron: "30 8 * * *"   # 4:30 PM PHT
-    - cron: "0 9 * * *"    # 5:00 PM PHT
-    - cron: "30 12 * * *"  # 8:30 PM PHT
-    - cron: "0 13 * * *"   # 9:00 PM PHT
   workflow_dispatch:
 
 jobs:
